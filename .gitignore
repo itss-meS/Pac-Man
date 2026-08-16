@@ -1,0 +1,34 @@
+# Build
+/build/
+/cpp_core/build/
+*.so
+*.pyd
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+*.egg-info/
+dist/
+*.whl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ROS
+/ros2_ws/install/
+/ros2_ws/build/
+/ros2_ws/log/
+
+# Data/Logs
+*.log
+*.bag
+maps/*.pgm
+maps/*.yaml
+!maps/competition_suite/  # Keep pre-generated suite
+
+# Python Env
+venv/
+.env
