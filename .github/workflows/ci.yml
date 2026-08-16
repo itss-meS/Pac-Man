@@ -1,0 +1,45 @@
+name: CI - Build & Test
+
+on: [push, pull_request]
+
+jobs:
+  build-cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Deps
+        run: sudo apt-get update && sudo apt-get install -y cmake libeigen3-dev python3-pybind11-dev
+      - name: Build C++ Core
+        run: |
+          cd cpp_core
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j4
+      - name: Run C++ Tests
+        run: cd cpp_core/build && ctest --output-on-failure
+
+  test-python:
+    runs-on: ubuntu-latest
+    needs: build-cpp
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install Python Deps
+        run: pip install -e ./python[dev]
+      - name: Copy Built Module
+        run: cp cpp_core/build/pacbot_core*.so python/pacbot/core/
+      - name: Run Benchmark (Quick)
+        run: python python/scripts/run_benchmark.py 20
+      - name: Lint
+        run: black --check python/ && isort --check python/
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [build-cpp, test-python]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker Image
+        run: docker build -t pacbot:latest -f docker/Dockerfile .
+      # - name: Push to Registry ...
