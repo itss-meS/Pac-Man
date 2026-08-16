@@ -80,4 +80,83 @@ class DecisionEngine:
 
         elif self.state == BotState.TARGET_PELLET:
             target = self._select_target(bot, dmap, time_rem)
-|
+            if target:
+                path = find_path_to_target(self.maze, start, target, dmap)
+                if path: bot.path, bot.target = path, target
+                else: self.state = BotState.EXPLORE
+            else: self.state = BotState.RUSH_EXIT
+
+        elif self.state == BotState.EVADE:
+            path = find_safest_spot(self.maze, start, dmap)
+            if path: bot.path = path
+            else: bot.path = [start]
+
+        elif self.state == BotState.TRAPPED:
+            bot.path = [start]
+            # Try wiggle
+            nbrs = self.maze.get_neighbors(start)
+            safe = [n for n in nbrs if self._get_danger_at(Pose(n[0]+0.5, n[1]+0.5)) < 0.3]
+            if safe: bot.path = [safe[0], start]; self.state = BotState.EVADE
+
+        else: # EXPLORE
+            target = self._select_target(bot, dmap, time_rem, force=True)
+            if target:
+                path = find_path_to_target(self.maze, start, target, dmap)
+                if path: bot.path, bot.target = path, target
+            else: self.state = BotState.RUSH_EXIT
+
+    def _select_target(self, bot: PacBot, dmap: np.ndarray, time_rem: float, force=False) -> Optional[Tuple[int,int]]:
+        # Cluster Pellets (Greedy Spatial Hash)
+        remaining = self.maze.remaining_pellets()
+        if not remaining: return None
+        
+        clusters = []
+        used = set()
+        for p in remaining:
+            if p in used: continue
+            cluster = [p]; used.add(p); val = self.maze.pellets[p]
+            for q in remaining:
+                if q in used: continue
+                if abs(p[0]-q[0]) + abs(p[1]-q[1]) <= 3:
+                    cluster.append(q); used.add(q); val += self.maze.pellets[q]
+            cx = sum(c[0] for c in cluster)//len(cluster)
+            cy = sum(c[1] for c in cluster)//len(cluster)
+            clusters.append({'center': (cx,cy), 'value': val, 'cells': cluster})
+
+        best_util = -1; best_target = None
+        bp = bot.believed_pose
+        
+        for c in clusters:
+            target = c['center']
+            val = c['value']
+            dist = abs(bp.x - target[0]) + abs(bp.y - target[1])
+            if dist == 0: dist = 0.1
+            
+            # Risk: Avg danger along straight line
+            risk = self._line_risk(bp.as_int(), target, dmap)
+            
+            # Utility
+            util = (val * self.aggression * CFG.W_PELLET_VALUE) / \
+                   (dist * CFG.W_PATH_COST + risk * CFG.W_RISK_AVERSION + time_rem * CFG.W_TIME_PRESSURE + 1e-6)
+            
+            if self.last_target == target: util *= 0.5 # Hysteresis
+            
+            if util > best_util:
+                best_util, best_target = util, target
+        
+        if best_util < 0.05 and not force: return None
+        self.last_target = best_target
+        return best_target
+
+    def _line_risk(self, s: Tuple[int,int], g: Tuple[int,int], dmap: np.ndarray) -> float:
+        x0,y0=s; x1,y1=g
+        dx,dy=abs(x1-x0),abs(y1-y0)
+        sx,sy=1 if x0<x1 else -1, 1 if y0<y1 else -1
+        err=dx-dy; risk=0; steps=0
+        while True:
+            risk += dmap[y0, x0]; steps+=1
+            if x0==x1 and y0==y1: break
+            e2=2*err
+            if e2>-dy: err-=dy; x0+=sx
+            if e2<dx: err+=dx; y0+=sy
+        return risk/max(1,steps)
