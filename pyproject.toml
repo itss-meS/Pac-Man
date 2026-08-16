@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "pybind11[global]"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pacbot"
+version = "1.0.0"
+description = "PacBot Competition Stack: C++ Core + Python Logic + ROS 2"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "pygame>=2.5",
+    "pyyaml>=6.0",
+    "opencv-python>=4.8",      # For sensor sim / image proc
+    "scipy>=1.10",             # For Kalman / Optimization
+    "py_trees>=2.2",           # Behavior Trees (Objective 2, 5)
+    "py_trees_ros_interfaces", # ROS 2 BT Integration
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "black", "isort", "mypy", "optuna"]
+ros = ["rclpy", "nav2_msgs", "geometry_msgs", "sensor_msgs"]
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["pacbot*"]
+
+[tool.setuptools.package-dir]
+"" = "python"
